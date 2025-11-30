@@ -1,0 +1,157 @@
+.app-container {
+  width: 100%;
+  max-width: 1400px;
+  height: 100%;
+  margin: 0 auto;
+}
+
+.welcome-container {
+  background: white;
+  border-radius: 12px;
+  padding: 40px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  animation: slideUp 0.5s ease-out;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.welcome-container h1 {
+  color: #667eea;
+  margin: 0 0 10px 0;
+  font-size: 28px;
+}
+
+.welcome-container p {
+  color: #666;
+  margin: 0 0 30px 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* API Key Form Styles */
+.api-key-form {
+  text-align: left;
+  margin: 30px 0;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #333;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.api-key-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: 'Courier New', monospace;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.api-key-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+}
+
+.api-key-hint {
+  margin: 8px 0 0 0;
+  font-size: 12px;
+  color: #999;
+}
+
+.api-key-hint a {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.api-key-hint a:hover {
+  text-decoration: underline;
+}
+
+.error-message {
+  background: #fee;
+  color: #c33;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  border-left: 4px solid #c33;
+}
+
+.api-status {
+  background: #f0f8f5;
+  border: 2px solid #4caf50;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 20px 0;
+}
+
+.api-status p {
+  margin: 0 0 12px 0;
+  color: #4caf50;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.change-api-btn {
+  background: #f0f0f0;
+  color: #666;
+  border: 1px solid #ddd;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.change-api-btn:hover {
+  background: #e0e0e0;
+  border-color: #999;
+}
+
+.start-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 12px 40px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.start-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+.start-btn:active {
+  transform: translateY(0);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
