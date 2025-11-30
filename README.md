@@ -12,6 +12,9 @@ A modern React chatbot application powered by Google Gemini AI, featuring a beau
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
 - **Secure API Key Management**: API key stored in environment variables, never exposed in frontend
 
+## Hosted link
+https://d1v1u5gegsjaef.cloudfront.net
+
 ## Prerequisites
 
 - Node.js (v14 or higher)
