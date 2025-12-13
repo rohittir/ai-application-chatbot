@@ -1,164 +1,61 @@
-import { OpenAI } from 'openai';
-
-/**
- * Get the API key from window (set during app initialization)
- */
-const getApiKey = () => {
-    return window.REACT_APP_HF_API_KEY || process.env.REACT_APP_HF_API_KEY;
-};
-
-/**
- * Initialize OpenAI client with current API key
- */
-const getOpenAIClient = () => {
-    const apiKey = getApiKey();
-    if (!apiKey) {
-        throw new Error('No API key configured. Please set your Hugging Face API key.');
-    }
-    
-    return new OpenAI({
-        baseURL: "https://router.huggingface.co/v1",
-        apiKey: apiKey,
-        dangerouslyAllowBrowser: true 
-    });
-};
-
-/**
- * Validation utilities
- */
-const Validators = {
-    /**
-     * Validate email address format
-     */
-    isValidEmail(email) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email);
-    },
-
-    /**
-     * Validate date of birth (must be a valid date and in the past)
-     */
-    isValidDateOfBirth(dateString) {
-        // Try to parse various date formats: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, etc.
-        let date;
-        
-        // Try ISO format (YYYY-MM-DD)
-        if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-            date = new Date(dateString);
-        }
-        // Try DD/MM/YYYY format
-        else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) {
-            const [day, month, year] = dateString.split('/');
-            date = new Date(year, month - 1, day);
-        }
-        // Try DD-MM-YYYY format
-        else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(dateString)) {
-            const [day, month, year] = dateString.split('-');
-            date = new Date(year, month - 1, day);
-        }
-        // Try MM/DD/YYYY format
-        else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) {
-            date = new Date(dateString);
-        }
-        else {
-            return false;
-        }
-
-        // Check if date is valid
-        if (isNaN(date.getTime())) {
-            return false;
-        }
-
-        // Check if date is in the past
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (date >= today) {
-            return false;
-        }
-
-        // Check if person is at least 18 years old
-        const eighteenYearsAgo = new Date();
-        eighteenYearsAgo.setFullYear(eighteenYearsAgo.getFullYear() - 18);
-        if (date > eighteenYearsAgo) {
-            return false;
-        }
-
-        return true;
-    },
-
-    /**
-     * Validate name (at least 2 characters, no special characters)
-     */
-    isValidName(name) {
-        if (!name || typeof name !== 'string') return false;
-        // Allow letters, spaces, hyphens, and apostrophes
-        const nameRegex = /^[a-zA-Z\s\-']{2,}$/;
-        return nameRegex.test(name.trim());
-    },
-
-    /**
-     * Validate phone number (basic validation)
-     */
-    isValidPhoneNumber(phone) {
-        // Remove common formatting characters
-        const cleaned = phone.replace(/[\s\-\+\(\)]/g, '');
-        // Should have at least 10 digits
-        return /^\d{10,}$/.test(cleaned);
-    }
-};
+const { Validators } = require('./validators.js');
 
 /**
  * AI Agent State Manager for Financial Application
  * Tracks user information across different categories
  */
 class FinancialApplicationAgent {
-    constructor() {
-        this.conversationHistory = [];
-        this.collectedData = {
-            personal: {
-                firstName: null,
-                middleName: null, // Optional field
-                lastName: null,
-                email: null,
-                emailConfirmed: false,
-                phoneNumber: null,
-                dateOfBirth: null,
-                dobConfirmed: false,
-                nationality: null
-            },
-            educational: {
-                highestQualification: null,
-                university: null,
-                fieldOfStudy: null,
-                graduationYear: null
-            },
-            professional: {
-                currentDesignation: null,
-                company: null,
-                yearsOfExperience: null,
-                annualIncome: null,
-                employmentType: null
-            },
-            family: {
-                maritalStatus: null,
-                dependents: null,
-                spouseName: null,
-                emergencyContact: null
-            }
-        };
-        this.currentSection = 'personal';
-        this.questionsAsked = {};
-        this.completionPercentage = 0;
+    constructor(initialData = null) {
+        if (initialData) {
+            // Restore from persisted data
+            this.collectedData = initialData.collectedData;
+            this.currentSection = initialData.currentSection;
+            this.createdAt = initialData.createdAt;
+        } else {
+            // New agent
+            this.collectedData = {
+                personal: {
+                    firstName: null,
+                    middleName: null,
+                    lastName: null,
+                    email: null,
+                    emailConfirmed: false,
+                    phoneNumber: null,
+                    dateOfBirth: null,
+                    dobConfirmed: false,
+                    nationality: null,
+                },
+                educational: {
+                    highestQualification: null,
+                    university: null,
+                    fieldOfStudy: null,
+                    graduationYear: null,
+                },
+                professional: {
+                    currentDesignation: null,
+                    company: null,
+                    yearsOfExperience: null,
+                    annualIncome: null,
+                    employmentType: null,
+                },
+                family: {
+                    maritalStatus: null,
+                    dependents: null,
+                    spouseName: null,
+                    emergencyContact: null,
+                },
+            };
+            this.currentSection = 'personal';
+            this.createdAt = Date.now();
+        }
     }
 
     /**
      * Get the system prompt for the AI agent
      */
     getSystemPrompt() {
-        const currentSectionData = this.collectedData[this.currentSection];
         const missingFields = this.getMissingFields();
-        
-        // Generate section-specific details and validation rules
+
         let sectionDetails = '';
         let validationRules = '';
         let guidelines = '';
@@ -191,7 +88,6 @@ Personal Section Guidelines:
 - For DOB, explain the format needed and verify age compliance
 - For phone, accept common formats (+1-234-567-8900, etc.)
 - Be warm and encouraging while collecting sensitive personal information`;
-
         } else if (this.currentSection === 'educational') {
             sectionDetails = `
 Current Section Fields:
@@ -216,7 +112,6 @@ Educational Section Guidelines:
 - If continuing education, accept "In Progress" for current studies
 - Be flexible with naming conventions for fields of study
 - Validate that graduation year is reasonable based on their age`;
-
         } else if (this.currentSection === 'professional') {
             sectionDetails = `
 Current Section Fields:
@@ -243,7 +138,6 @@ Professional Section Guidelines:
 - Accept various income formats and normalize to standard format
 - Years of experience should be reasonable relative to age
 - Ask clarifying questions if employment situation is unclear`;
-
         } else if (this.currentSection === 'family') {
             sectionDetails = `
 Current Section Fields:
@@ -308,9 +202,8 @@ Respond naturally and conversationally while collecting structured data.`;
      */
     isCurrentSectionComplete() {
         const sectionData = this.collectedData[this.currentSection];
-        
+
         if (this.currentSection === 'personal') {
-            // For personal section, middle name is optional
             return (
                 sectionData.firstName !== null &&
                 sectionData.lastName !== null &&
@@ -322,10 +215,8 @@ Respond naturally and conversationally while collecting structured data.`;
                 sectionData.nationality !== null
             );
         }
-        
-        // For other sections, all fields must be filled
+
         return Object.entries(sectionData).every(([key, value]) => {
-            // Skip confirmation fields
             if (key.includes('Confirmed')) return true;
             return value !== null;
         });
@@ -354,20 +245,16 @@ Respond naturally and conversationally while collecting structured data.`;
 
     /**
      * Use LLM to extract field values from user message
-     * Requests the AI model to interpret the message and extract relevant fields
      */
-    async updateCollectedDataWithLLM(userMessage) {
+    async updateCollectedDataWithLLM(userMessage, openAiClient) {
         const sectionData = this.collectedData[this.currentSection];
         const missingFields = this.getMissingFields();
 
         if (missingFields.length === 0) {
-            return; // All fields collected
+            return;
         }
 
         try {
-            const openAi = getOpenAIClient();
-
-            // Create an extraction prompt for the LLM
             const extractionPrompt = `You are a data extraction assistant. Extract structured information from the user's message.
 
 Current section: ${this.currentSection}
@@ -378,7 +265,9 @@ User message: "${userMessage}"
 Your task: Analyze the user's message and extract values for any missing fields. Return ONLY a valid JSON object with extracted values. Use null for fields not mentioned.
 
 Expected format based on section:
-${this.currentSection === 'personal' ? `{
+${
+    this.currentSection === 'personal'
+        ? `{
   "firstName": "string or null",
   "middleName": "string or null",
   "lastName": "string or null",
@@ -386,84 +275,83 @@ ${this.currentSection === 'personal' ? `{
   "phoneNumber": "string or null",
   "dateOfBirth": "string or null",
   "nationality": "string or null"
-}` : this.currentSection === 'educational' ? `{
+}`
+        : this.currentSection === 'educational'
+        ? `{
   "highestQualification": "string or null",
   "university": "string or null",
   "fieldOfStudy": "string or null",
   "graduationYear": "string or null"
-}` : this.currentSection === 'professional' ? `{
+}`
+        : this.currentSection === 'professional'
+        ? `{
   "currentDesignation": "string or null",
   "company": "string or null",
   "yearsOfExperience": "string or null",
   "annualIncome": "string or null",
   "employmentType": "string or null"
-}` : `{
+}`
+        : `{
   "maritalStatus": "string or null",
   "dependents": "string or null",
   "spouseName": "string or null",
   "emergencyContact": "string or null"
-}`}
+}`
+}
 
 Return ONLY the JSON object, no additional text.`;
 
-            const response = await openAi.chat.completions.create({
-                model: "moonshotai/Kimi-K2-Instruct-0905",
+            const response = await openAiClient.chat.completions.create({
+                model: 'moonshotai/Kimi-K2-Instruct-0905',
                 messages: [
                     {
-                        role: "user",
-                        content: extractionPrompt
-                    }
+                        role: 'user',
+                        content: extractionPrompt,
+                    },
                 ],
                 temperature: 0.3,
-                max_tokens: 500
+                max_tokens: 500,
             });
 
             const extractedText = response.choices[0].message.content.trim();
-            
-            // Parse the JSON response
+
             let extractedData = {};
             try {
                 extractedData = JSON.parse(extractedText);
             } catch (e) {
-                // If JSON parsing fails, try to extract JSON from the response
                 const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
                 if (jsonMatch) {
                     extractedData = JSON.parse(jsonMatch[0]);
                 }
             }
 
-            // Validate and store extracted data
             this.validateAndStoreExtractedData(extractedData);
-
         } catch (error) {
             console.error('Error extracting data with LLM:', error);
-            // Silently fail - the message processing will continue without data extraction
         }
     }
 
     /**
-     * Validate and store extracted data with appropriate validators
+     * Validate and store extracted data
      */
     validateAndStoreExtractedData(extractedData) {
         const sectionData = this.collectedData[this.currentSection];
 
         Object.entries(extractedData).forEach(([key, value]) => {
             if (value === null || value === undefined) {
-                return; // Skip null values
+                return;
             }
 
             if (!sectionData.hasOwnProperty(key)) {
-                return; // Skip unknown fields
+                return;
             }
 
-            // Skip if already collected
             if (sectionData[key] !== null) {
                 return;
             }
 
             value = String(value).trim();
 
-            // Apply validators based on field type
             switch (key) {
                 case 'email':
                     if (Validators.isValidEmail(value)) {
@@ -500,25 +388,7 @@ Return ONLY the JSON object, no additional text.`;
                     }
                     break;
 
-                case 'nationality':
-                case 'highestQualification':
-                case 'university':
-                case 'fieldOfStudy':
-                case 'graduationYear':
-                case 'currentDesignation':
-                case 'company':
-                case 'annualIncome':
-                case 'employmentType':
-                case 'maritalStatus':
-                case 'dependents':
-                    // These don't require special validation
-                    if (value && value.length > 0) {
-                        sectionData[key] = value;
-                    }
-                    break;
-
                 case 'yearsOfExperience':
-                    // Try to extract number if it's a string with text
                     const numMatch = value.match(/\d+/);
                     if (numMatch) {
                         sectionData[key] = numMatch[0];
@@ -533,16 +403,6 @@ Return ONLY the JSON object, no additional text.`;
                     }
             }
         });
-    }
-
-    /**
-     * Simplified updateCollectedData that triggers LLM extraction
-     * This is now a wrapper that calls the async LLM extraction
-     */
-    updateCollectedData(userMessage) {
-        // Trigger LLM extraction asynchronously without blocking
-        // This will be awaited in generateAgentResponse where it's needed
-        this._pendingExtraction = this.updateCollectedDataWithLLM(userMessage);
     }
 
     /**
@@ -568,8 +428,8 @@ Return ONLY the JSON object, no additional text.`;
      * Get summary of collected data
      */
     getSummary() {
-        let summary = "📋 **Application Summary**\n\n";
-        
+        let summary = '📋 **Application Summary**\n\n';
+
         Object.entries(this.collectedData).forEach(([section, data]) => {
             summary += `**${section.charAt(0).toUpperCase() + section.slice(1)} Information:**\n`;
             Object.entries(data).forEach(([key, value]) => {
@@ -583,151 +443,4 @@ Return ONLY the JSON object, no additional text.`;
     }
 }
 
-// Global agent instance
-let agent = new FinancialApplicationAgent();
-
-/**
- * Initialize the AI agent
- */
-export const initializeAgent = () => {
-    agent = new FinancialApplicationAgent();
-    agent.conversationHistory = [];
-    return {
-        message: "Welcome to the Financial Application Portal! 👋\n\nI'm your Application Administrator. I'll help you complete your financial application by collecting your personal, educational, professional, and family information. Let's get started!\n\nWhat is your full name?",
-        collectedData: agent.collectedData,
-        completionPercentage: 0,
-        currentSection: 'personal'
-    };
-};
-
-/**
- * Get agent state
- */
-export const getAgentState = () => {
-    return {
-        collectedData: agent.collectedData,
-        currentSection: agent.currentSection,
-        completionPercentage: agent.getCompletionPercentage(),
-        missingFields: agent.getMissingFields()
-    };
-};
-
-/**
- * Generate AI agent response using Hugging Face model
- * @param {string} userMessage - The user's message
- * @returns {Promise<Object>} - Response object with message and metadata
- */
-export const generateAgentResponse = async (userMessage) => {
-    try {
-        // Update collected data based on user message using LLM
-        agent.updateCollectedData(userMessage);
-        
-        // Wait for LLM extraction to complete
-        if (agent._pendingExtraction) {
-            await agent._pendingExtraction;
-        }
-
-        // Add user message to history
-        agent.conversationHistory.push({
-            role: "user",
-            content: userMessage
-        });
-
-        // Prepare messages for API
-        const messages = [
-            {
-                role: "system",
-                content: agent.getSystemPrompt()
-            },
-            ...agent.conversationHistory
-        ];
-
-        // Get OpenAI client with current API key
-        const openAi = getOpenAIClient();
-
-        // Call Hugging Face API with Kimi model
-        const response = await openAi.chat.completions.create({
-            model: "moonshotai/Kimi-K2-Instruct-0905",
-            messages: messages,
-            temperature: 0.7,
-            max_tokens: 300,
-            top_p: 0.9
-        });
-
-        const botMessage = response.choices[0].message.content;
-        
-        // Add bot response to history
-        agent.conversationHistory.push({
-            role: "assistant",
-            content: botMessage
-        });
-
-        // Check if current section is complete
-        if (agent.isCurrentSectionComplete() && agent.currentSection !== 'family') {
-            const sectionName = agent.currentSection;
-            const hasNext = agent.moveToNextSection();
-            
-            if (hasNext) {
-                return {
-                    message: `${botMessage}\n\n✅ Great! We've completed your ${sectionName} information. Now let's move to your ${agent.currentSection} details.`,
-                    collectedData: agent.collectedData,
-                    completionPercentage: agent.getCompletionPercentage(),
-                    currentSection: agent.currentSection,
-                    sectionComplete: true
-                };
-            }
-        }
-
-        // Check if all sections complete
-        if (agent.currentSection === 'family' && agent.isCurrentSectionComplete()) {
-            return {
-                message: `${botMessage}\n\n🎉 **Application Complete!**\n\n${agent.getSummary()}\n\nThank you for completing your financial application. We'll review your information and get back to you soon!`,
-                collectedData: agent.collectedData,
-                completionPercentage: 100,
-                currentSection: agent.currentSection,
-                applicationComplete: true,
-                summary: agent.getSummary()
-            };
-        }
-
-        return {
-            message: botMessage,
-            collectedData: agent.collectedData,
-            completionPercentage: agent.getCompletionPercentage(),
-            currentSection: agent.currentSection,
-            sectionComplete: false
-        };
-
-    } catch (error) {
-        console.error('Error calling Hugging Face API:', error);
-
-        // Provide a user-friendly error message
-        if (error.response) {
-            if (error.response.status === 400) {
-                throw new Error('Invalid request. Please try again with valid information.');
-            } else if (error.response.status === 401) {
-                throw new Error('Authentication failed. API key is invalid.');
-            } else if (error.response.status === 429) {
-                throw new Error('Rate limit exceeded. Please wait a moment and try again.');
-            }
-        }
-
-        throw new Error('Failed to process your request. Please try again.');
-    }
-};
-
-/**
- * Reset the agent
- */
-export const resetAgent = () => {
-    agent = new FinancialApplicationAgent();
-    return initializeAgent();
-};
-
-/**
- * Backward compatibility - kept for reference
- */
-export const generateGeminiResponse = async (userMessage) => {
-    const response = await generateAgentResponse(userMessage);
-    return response.message;
-};
+module.exports = { FinancialApplicationAgent };

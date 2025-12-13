@@ -1,0 +1,121 @@
+service: ai-form-chatbot
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 30
+  
+  environment:
+    DYNAMODB_TABLE: ${self:service}-${self:provider.stage}
+    HF_API_KEY: ${env:HF_API_KEY, 'hf_placeholder_key_set_before_deploy'}
+    NODE_ENV: ${self:provider.stage}
+  
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:BatchWriteItem
+          Resource: "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+          Resource: "arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}/index/*"
+
+functions:
+  # Initialize new chat session
+  initializeChat:
+    handler: src/handlers/initializeChat.handler
+    events:
+      - http:
+          path: chat/initialize
+          method: post
+          cors: true
+
+  # Send message and get response
+  sendMessage:
+    handler: src/handlers/sendMessage.handler
+    events:
+      - http:
+          path: chat/send
+          method: post
+          cors: true
+
+  # Get chat session state
+  getState:
+    handler: src/handlers/getState.handler
+    events:
+      - http:
+          path: chat/state/{sessionId}
+          method: get
+          cors: true
+
+  # Reset chat session
+  resetChat:
+    handler: src/handlers/resetChat.handler
+    events:
+      - http:
+          path: chat/reset/{sessionId}
+          method: post
+          cors: true
+
+  # Get all sessions (admin)
+  listSessions:
+    handler: src/handlers/listSessions.handler
+    events:
+      - http:
+          path: chat/sessions
+          method: get
+          cors: true
+
+resources:
+  Resources:
+    # DynamoDB Table for chat sessions
+    ChatSessionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        AttributeDefinitions:
+          - AttributeName: sessionId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: sessionId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+        TimeToLiveSpecification:
+          Enabled: true
+          AttributeName: expiresAt
+
+# plugins:
+#   - serverless-plugin-warmup
+
+# custom:
+#   warmup:
+#     default:
+#       enabled: false
+
+package:
+  individually: false
+  include:
+    - src/**
+    - node_modules/**
+  exclude:
+    - .git
+    - .gitignore
+    - README.md
+    - MONOREPO_SETUP.md
+    - package-lock.json

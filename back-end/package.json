@@ -1,0 +1,20 @@
+{
+  "name": "ai-chatbot-form-backend",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "aws-sdk": "^2.1406.0",
+    "openai": "^6.9.1",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "serverless": "^3.40.0"
+  },
+  "scripts": {
+    "deploy": "serverless deploy --stage dev --region us-east-1",
+    "deploy:prod": "serverless deploy --stage prod --region us-east-1",
+    "logs": "serverless logs -f sendMessage --stage dev --tail",
+    "remove": "serverless remove --stage dev --region us-east-1",
+    "info": "serverless info --stage dev"
+  }
+}

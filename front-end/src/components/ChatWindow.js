@@ -1,37 +1,48 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './ChatWindow.css';
-import { generateAgentResponse, initializeAgent, resetAgent, getAgentState } from '../services/geminiService';
+import { initializeChat, sendMessage, resetChat } from '../chatApi';
 
-function ChatWindow({ onChangeApiKey }) {
+function ChatWindow({ onRestart }) {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [agentState, setAgentState] = useState(getAgentState());
+  const [sessionId, setSessionId] = useState(null);
+  const [collectedData, setCollectedData] = useState(null);
+  const [completionPercentage, setCompletionPercentage] = useState(0);
+  const [currentSection, setCurrentSection] = useState('personal');
   const [applicationComplete, setApplicationComplete] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Initialize agent on component mount
+  // Initialize chat on component mount
   useEffect(() => {
-    const initialState = initializeAgent();
-    setMessages([
-      {
-        id: 1,
-        text: initialState.message,
-        sender: 'bot',
-        timestamp: new Date()
+    const initChat = async () => {
+      try {
+        const response = await initializeChat();
+        setSessionId(response.sessionId);
+        setMessages([
+          {
+            id: 1,
+            text: response.message,
+            sender: 'bot',
+            timestamp: new Date()
+          }
+        ]);
+        setCollectedData(response.collectedData);
+        setCompletionPercentage(response.completionPercentage);
+        setCurrentSection(response.currentSection);
+        setTimeout(() => inputRef.current?.focus(), 100);
+      } catch (err) {
+        setError('Failed to initialize chat: ' + err.message);
       }
-    ]);
-    setAgentState(getAgentState());
-    // Focus on input after initialization
-    setTimeout(() => inputRef.current?.focus(), 100);
+    };
+    initChat();
   }, []);
 
   // Auto-scroll to the latest message and focus on input
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    // Focus on input after messages update (but not when loading)
     if (!isLoading && !applicationComplete) {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
@@ -39,15 +50,13 @@ function ChatWindow({ onChangeApiKey }) {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    
-    if (!inputValue.trim() || applicationComplete) {
+
+    if (!inputValue.trim() || applicationComplete || !sessionId) {
       return;
     }
 
-    // Clear any previous errors
     setError(null);
 
-    // Add user message to chat
     const userMessage = {
       id: messages.length + 1,
       text: inputValue,
@@ -60,9 +69,8 @@ function ChatWindow({ onChangeApiKey }) {
     setIsLoading(true);
 
     try {
-      // Get response from AI Agent
-      const response = await generateAgentResponse(inputValue);
-      
+      const response = await sendMessage(sessionId, inputValue);
+
       const botMessage = {
         id: messages.length + 2,
         text: response.message,
@@ -71,17 +79,17 @@ function ChatWindow({ onChangeApiKey }) {
       };
 
       setMessages(prev => [...prev, botMessage]);
-      setAgentState(getAgentState());
+      setCollectedData(response.collectedData);
+      setCompletionPercentage(response.completionPercentage);
+      setCurrentSection(response.currentSection);
 
-      // Check if application is complete
       if (response.applicationComplete) {
         setApplicationComplete(true);
       }
     } catch (err) {
-      setError(err.message || 'Failed to get response from AI');
+      setError(err.message || 'Failed to process message');
       console.error('Error:', err);
-      
-      // Add error message to chat
+
       const errorMessage = {
         id: messages.length + 2,
         text: `Error: ${err.message}`,
@@ -95,19 +103,28 @@ function ChatWindow({ onChangeApiKey }) {
     }
   };
 
-  const handleRestart = () => {
-    const initialState = resetAgent();
-    setMessages([
-      {
-        id: 1,
-        text: initialState.message,
-        sender: 'bot',
-        timestamp: new Date()
-      }
-    ]);
-    setAgentState(getAgentState());
-    setApplicationComplete(false);
-    setError(null);
+  const handleRestart = async () => {
+    try {
+      setIsLoading(true);
+      const response = await resetChat(sessionId);
+      setMessages([
+        {
+          id: 1,
+          text: response.message,
+          sender: 'bot',
+          timestamp: new Date()
+        }
+      ]);
+      setCollectedData(response.collectedData);
+      setCompletionPercentage(response.completionPercentage);
+      setCurrentSection(response.currentSection);
+      setApplicationComplete(false);
+      setError(null);
+    } catch (err) {
+      setError('Failed to restart chat: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -117,29 +134,22 @@ function ChatWindow({ onChangeApiKey }) {
           <div className="header-content">
             <div>
               <h2>📋 Financial Application Assistant</h2>
-              <p>Powered by AI Agent (Hugging Face)</p>
+              <p>Powered by AWS Lambda + DynamoDB</p>
             </div>
-            <button 
-              className="header-btn change-api-btn-header" 
-              onClick={onChangeApiKey}
-              title="Change API Key"
-            >
-              🔑 Change API
-            </button>
           </div>
         </div>
 
         <div className="progress-bar">
           <div 
             className="progress-fill" 
-            style={{ width: `${agentState.completionPercentage}%` }}
+            style={{ width: `${completionPercentage}%` }}
           >
-            <span className="progress-text">{agentState.completionPercentage}%</span>
+            <span className="progress-text">{completionPercentage}%</span>
           </div>
         </div>
 
         <div className="current-section">
-          <span>📍 Current Section: <strong>{agentState.currentSection.toUpperCase()}</strong></span>
+          <span>📍 Current Section: <strong>{currentSection.toUpperCase()}</strong></span>
         </div>
 
         <div className="chat-messages">
@@ -156,7 +166,7 @@ function ChatWindow({ onChangeApiKey }) {
               </span>
             </div>
           ))}
-          
+
           {isLoading && (
             <div className="message bot">
               <div className="message-bubble">
@@ -168,7 +178,7 @@ function ChatWindow({ onChangeApiKey }) {
               </div>
             </div>
           )}
-          
+
           <div ref={messagesEndRef} />
         </div>
 
@@ -187,7 +197,7 @@ function ChatWindow({ onChangeApiKey }) {
             placeholder={applicationComplete ? "Application Complete! Click Restart." : "Type your answer here..."}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            disabled={isLoading || applicationComplete}
+            disabled={isLoading || applicationComplete || !sessionId}
           />
           {applicationComplete ? (
             <button 
@@ -201,7 +211,7 @@ function ChatWindow({ onChangeApiKey }) {
             <button 
               type="submit" 
               className="send-btn"
-              disabled={isLoading || !inputValue.trim()}
+              disabled={isLoading || !inputValue.trim() || !sessionId}
             >
               Send
             </button>
@@ -212,7 +222,7 @@ function ChatWindow({ onChangeApiKey }) {
       <div className="data-panel">
         <h3>📊 Collected Information</h3>
         <div className="data-sections">
-          {Object.entries(agentState.collectedData).map(([section, data]) => (
+          {collectedData && Object.entries(collectedData).map(([section, data]) => (
             <div key={section} className={`data-section ${section}`}>
               <h4>{section.charAt(0).toUpperCase() + section.slice(1)}</h4>
               <div className="data-fields">
